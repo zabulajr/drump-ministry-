@@ -9,7 +9,7 @@
   :root { --green:#1b7f4b; --dark:#02543e; --mid:#0b8b50; --red:#c62828; --blue:#1565c0; --orange:#e65100; --grey:#546e7a; --line:#dfe8e2; }
   * { box-sizing: border-box; }
   html, body { height: 100%; margin: 0; font-family: -apple-system, system-ui, 'Segoe UI', Roboto, sans-serif; color: #222; background: linear-gradient(160deg, #e3f1e9 0%, #f6faf7 50%, #dcefe3 100%); }
-  button, select { font: inherit; }
+  button, select, input { font: inherit; }
   button { cursor: pointer; }
 
   #login { height: 100%; display: flex; align-items: center; justify-content: center; padding: 16px; background: linear-gradient(160deg, #02543e 0%, #0b8b50 55%, #47b52a 100%); }
@@ -28,11 +28,19 @@
   .stat { background: rgba(255,255,255,.14); border: 1px solid rgba(255,255,255,.28); border-radius: 10px; padding: 4px 12px; text-align: center; min-width: 74px; }
   .stat b { display: block; font-size: 18px; }
   .stat span { font-size: 11px; color: rgba(255,255,255,.85); }
+  .stat.clickable { cursor: pointer; border-color: #ffd54f; }
+  .stat.clickable:hover { background: rgba(255,255,255,.25); }
+  .stat.active { background: #ffd54f; color: #222; }
+  .stat.active span { color: #444; }
   .spacer { flex: 1; }
   .btn { padding: 8px 14px; border-radius: 16px; border: 1px solid #999; background: #fff; font-weight: 600; color: #222; }
   header .btn { border-color: rgba(255,255,255,.6); }
   .btn.on { background: #ffd54f; border-color: #ffd54f; color: #222; }
   .btn.gold { background: #ffd54f; border-color: #ffd54f; }
+
+  #searchRow { display: none; align-items: center; gap: 8px; padding: 8px 16px; background: #fff; border-bottom: 1px solid var(--line); }
+  #searchInput { flex: 1; padding: 9px 14px; border: 1px solid #bbb; border-radius: 18px; font-size: 15px; }
+
   main { flex: 1; min-height: 0; display: grid; grid-template-columns: 400px 1fr; }
   #side { overflow-y: auto; padding: 12px; border-right: 1px solid var(--line);
     background: linear-gradient(rgba(255,255,255,.94), rgba(255,255,255,.94)), url(logo.png) center 92% / 90% no-repeat, #fff; }
@@ -42,6 +50,7 @@
   .item:hover { background: #f1faf5; }
   .dot { width: 14px; height: 14px; border-radius: 50%; margin-top: 3px; flex: none; }
   .dot.red { background: var(--red); } .dot.green { background: var(--green); }
+  .rank { font-weight: 700; color: var(--orange); min-width: 26px; }
   .sub { color: #666; font-size: 13px; }
   .back { border: 0; background: none; color: var(--blue); font-weight: 600; padding: 0 0 8px; }
   h2 { margin: 4px 0; font-size: 19px; }
@@ -106,12 +115,17 @@
     <div class="brand"><img src="logo.png" alt="" onerror="this.style.display='none'">Drump · Ministry Dashboard</div>
     <div class="stats" id="stats"></div>
     <div class="spacer"></div>
+    <button class="btn" id="searchBtn" title="Search by ward, LGA or remarks">🔍</button>
     <button class="btn gold" id="allTime">All-Time Cleared · <b id="allTimeN">0</b></button>
     <button class="btn" id="fLegal">Authorized</button>
     <button class="btn" id="fIllegal">Unauthorized</button>
     <button class="btn" id="refresh">Refresh</button>
     <button class="btn" id="signOut">Sign Out</button>
   </header>
+  <div id="searchRow">
+    <input id="searchInput" type="search" placeholder="Search by ward, LGA or remarks" autocomplete="off">
+    <button class="btn" id="searchClear">Clear</button>
+  </div>
   <main>
     <div id="side"></div>
     <div id="map"></div>
@@ -154,8 +168,8 @@ const SUPABASE_ANON_KEY = 'sb_publishable_7IOmhdNwj2CvjBkVOp11WA_ba9L3gxn';
 const db = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 let sites = [], checksBySite = {}, totalDumped = 0;
-let filter = null, selectedId = null;
-let map = null, markers = {}, refreshTimer = null, firstFit = true;
+let filter = null, selectedId = null, repeatMode = false, query = '';
+let map = null, markers = {}, refreshTimer = null, firstFit = true, fitTimer = null;
 
 const KIND = {
   mapped: ['Mapped', 'grey'],
@@ -196,6 +210,27 @@ function clearedEvents() {
   return ev;
 }
 const countSites = (events) => new Set(events.map((e) => e.siteId)).size;
+
+const dumpedChecks = (siteId) => (checksBySite[siteId] || []).filter((x) => x.result === 'dumped_again');
+const dumpedCount = (siteId) => dumpedChecks(siteId).length;
+const lastDumpedTime = (siteId) => {
+  const list = dumpedChecks(siteId);
+  return list.length ? Math.max(...list.map((x) => new Date(x.created_at).getTime())) : 0;
+};
+
+const matches = (s, q) => !q || [s.ward, s.lga, s.notes].some((v) => String(v || '').toLowerCase().includes(q));
+
+function visibleSites() {
+  const q = query.trim().toLowerCase();
+  const list = sites.filter((s) =>
+    (!filter || s.legality === filter) &&
+    matches(s, q) &&
+    (!repeatMode || dumpedCount(s.id) > 0));
+  if (repeatMode) {
+    list.sort((a, b) => dumpedCount(b.id) - dumpedCount(a.id) || lastDumpedTime(b.id) - lastDumpedTime(a.id));
+  }
+  return list;
+}
 
 /* ---------- login ---------- */
 function showLogin(msg) {
@@ -246,6 +281,13 @@ function initMap() {
   L.control.layers({ 'Satellite + labels': satellite, 'Street map': street }).addTo(map);
 }
 
+function fitVisible() {
+  const vis = visibleSites();
+  if (!map || !vis.length) return;
+  if (vis.length === 1) map.setView([vis[0].latitude, vis[0].longitude], 17);
+  else map.fitBounds(L.latLngBounds(vis.map((s) => [s.latitude, s.longitude])).pad(0.2), { maxZoom: 17 });
+}
+
 /* ---------- data ---------- */
 async function loadAll() {
   const [s, c] = await Promise.all([
@@ -264,13 +306,11 @@ async function loadAll() {
   if ($('statsModal').style.display === 'flex') updateStatsResult();
 }
 
-const visibleSites = () => sites.filter((s) => !filter || s.legality === filter);
-const dumpedCount = (siteId) => (checksBySite[siteId] || []).filter((x) => x.result === 'dumped_again').length;
-
 function render() {
   renderStats();
   $('fLegal').classList.toggle('on', filter === 'legal');
   $('fIllegal').classList.toggle('on', filter === 'illegal');
+  $('searchBtn').classList.toggle('on', $('searchRow').style.display === 'flex');
   $('allTimeN').textContent = countSites(clearedEvents());
   renderMarkers();
   renderSide();
@@ -284,9 +324,11 @@ function renderStats() {
     ['Not Cleared', sites.length - cleared],
     ['Authorized', sites.filter((s) => s.legality === 'legal').length],
     ['Unauthorized', sites.filter((s) => s.legality === 'illegal').length],
-    ['Dumped Again', totalDumped],
+    ['Dumped Again', totalDumped, 'repeat'],
   ];
-  $('stats').innerHTML = items.map(([label, n]) => `<div class="stat"><b>${n}</b><span>${label}</span></div>`).join('');
+  $('stats').innerHTML = items.map(([label, n, action]) => action
+    ? `<div class="stat clickable ${repeatMode ? 'active' : ''}" data-action="${action}" title="Show the sites that keep getting dumped on again, worst first"><b>${n}</b><span>${label}</span></div>`
+    : `<div class="stat"><b>${n}</b><span>${label}</span></div>`).join('');
 }
 
 function renderMarkers() {
@@ -337,18 +379,29 @@ function renderSide() {
   const site = vis.find((s) => s.id === selectedId);
   if (!site) {
     selectedId = null;
+    const q = query.trim();
+    let head = `Showing ${vis.length} of ${sites.length} sites`;
+    if (repeatMode) head = `Repeat dumping: ${vis.length} site${vis.length === 1 ? '' : 's'}, most repeats first`;
+    if (filter) head += ` · ${LEG[filter]} only`;
+    if (q) head += ` · search: “${esc(q)}”`;
+    const empty = repeatMode ? 'No site has been dumped on again yet.' : q ? 'No sites match your search.' : 'No sites to show.';
     side.innerHTML =
-      `<p class="count">Showing ${vis.length} of ${sites.length} sites${filter ? ' (' + LEG[filter].toLowerCase() + ' only)' : ''}</p>` +
-      (vis.map((s) => {
+      `<p class="count">${head}</p>` +
+      (vis.map((s, i) => {
         const area = [s.ward, s.lga].filter(Boolean).join(', ') || 'No area entered';
         const again = dumpedCount(s.id);
+        const last = lastDumpedTime(s.id);
+        const sub = repeatMode
+          ? `Dumped again ×${again} · last ${esc(fmtDate(new Date(last).toISOString()))} · ${s.status === 'cleared' ? 'Cleared now' : 'Not cleared now'}`
+          : `${esc(LEG[s.legality] || 'Unclassified')} · Mapped ${esc(fmtDate(s.created_at))} · ${s.status === 'cleared' ? 'Cleared' : 'Not cleared'}${again ? ' · Dumped again ×' + again : ''}`;
         return `<div class="item" data-id="${esc(s.id)}">
+          ${repeatMode ? `<span class="rank">#${i + 1}</span>` : ''}
           <span class="dot ${s.status === 'cleared' ? 'green' : 'red'}"></span>
           <div><b>${esc(cap(s.waste))} waste · ${esc(cap(s.size))}</b>
           <div class="sub">${esc(area)}</div>
-          <div class="sub">${esc(LEG[s.legality] || 'Unclassified')} · Mapped ${esc(fmtDate(s.created_at))} · ${s.status === 'cleared' ? 'Cleared' : 'Not cleared'}${again ? ' · Dumped again ×' + again : ''}</div></div>
+          <div class="sub">${sub}</div></div>
         </div>`;
-      }).join('') || '<p>No sites to show.</p>');
+      }).join('') || `<p>${empty}</p>`);
     return;
   }
 
@@ -364,6 +417,7 @@ function renderSide() {
     <div>
       ${site.legality ? `<span class="pill ${esc(site.legality)}">${LEG[site.legality]} dump site</span>` : ''}
       <span class="pill ${cleared ? 'green' : 'red'}">${cleared ? 'Cleared' : 'Not cleared'}</span>
+      ${dumpedCount(site.id) ? `<span class="pill orange">Dumped again ×${dumpedCount(site.id)}</span>` : ''}
     </div>
     <p class="sub">${esc(area)}<br>${site.latitude.toFixed(5)}, ${site.longitude.toFixed(5)}</p>
     <h3>Remarks</h3>
@@ -442,9 +496,40 @@ $('smYear').onchange = updateStatsResult;
 $('smMonth').onchange = updateStatsResult;
 $('statsModal').addEventListener('click', (e) => { if (e.target === $('statsModal')) $('statsModal').style.display = 'none'; });
 
-/* ---------- filters and buttons ---------- */
-$('fLegal').onclick = () => { filter = filter === 'legal' ? null : 'legal'; selectedId = null; render(); };
-$('fIllegal').onclick = () => { filter = filter === 'illegal' ? null : 'illegal'; selectedId = null; render(); };
+/* ---------- search, filters and buttons ---------- */
+function resizeMapSoon() { setTimeout(() => map && map.invalidateSize(), 60); }
+
+$('searchBtn').onclick = () => {
+  const row = $('searchRow');
+  const opening = row.style.display !== 'flex';
+  row.style.display = opening ? 'flex' : 'none';
+  if (opening) {
+    $('searchInput').focus();
+  } else {
+    query = '';
+    $('searchInput').value = '';
+    selectedId = null;
+  }
+  render();
+  resizeMapSoon();
+};
+$('searchInput').addEventListener('input', (e) => {
+  query = e.target.value;
+  selectedId = null;
+  render();
+  clearTimeout(fitTimer);
+  fitTimer = setTimeout(fitVisible, 350);
+});
+$('searchClear').onclick = () => {
+  query = '';
+  $('searchInput').value = '';
+  selectedId = null;
+  render();
+  $('searchInput').focus();
+};
+
+$('fLegal').onclick = () => { filter = filter === 'legal' ? null : 'legal'; selectedId = null; render(); fitVisible(); };
+$('fIllegal').onclick = () => { filter = filter === 'illegal' ? null : 'illegal'; selectedId = null; render(); fitVisible(); };
 $('refresh').onclick = loadAll;
 
 /* ---------- photo zoom ---------- */
@@ -476,6 +561,14 @@ document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closePhoto
 document.addEventListener('click', (e) => {
   const img = e.target.closest('.zoomable');
   if (img) { openPhoto(img.dataset.src, img.dataset.label); return; }
+  const tile = e.target.closest('[data-action="repeat"]');
+  if (tile) {
+    repeatMode = !repeatMode;
+    selectedId = null;
+    render();
+    fitVisible();
+    return;
+  }
   const item = e.target.closest('.item[data-id]');
   if (item) select(item.dataset.id);
 });
