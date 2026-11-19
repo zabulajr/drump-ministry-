@@ -1,0 +1,490 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Drump · Ministry Dashboard</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<style>
+  :root { --green:#1b7f4b; --dark:#02543e; --mid:#0b8b50; --red:#c62828; --blue:#1565c0; --orange:#e65100; --grey:#546e7a; --line:#dfe8e2; }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; font-family: -apple-system, system-ui, 'Segoe UI', Roboto, sans-serif; color: #222; background: linear-gradient(160deg, #e3f1e9 0%, #f6faf7 50%, #dcefe3 100%); }
+  button, select { font: inherit; }
+  button { cursor: pointer; }
+
+  #login { height: 100%; display: flex; align-items: center; justify-content: center; padding: 16px; background: linear-gradient(160deg, #02543e 0%, #0b8b50 55%, #47b52a 100%); }
+  .login-box { background: #fff; border-radius: 16px; padding: 28px; width: 100%; max-width: 380px; text-align: center; box-shadow: 0 20px 50px rgba(0,0,0,.3); }
+  .login-box img { width: 240px; max-width: 100%; margin: -20px auto -24px; display: block; }
+  .login-box p { margin: 0 0 16px; color: #666; font-size: 14px; }
+  .login-box input { width: 100%; padding: 11px; margin-bottom: 10px; border: 1px solid #bbb; border-radius: 8px; font-size: 15px; }
+  .login-box button { width: 100%; padding: 12px; background: var(--green); color: #fff; border: 0; border-radius: 8px; font-weight: 600; }
+  #loginMsg { color: var(--red); font-size: 13px; min-height: 18px; margin-top: 10px; }
+
+  #app { height: 100%; display: none; flex-direction: column; }
+  header { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px; padding: 10px 16px; background: linear-gradient(90deg, #02543e, #0b8b50); color: #fff; box-shadow: 0 2px 10px rgba(0,0,0,.2); position: relative; z-index: 1000; }
+  .brand { display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 18px; }
+  .brand img { height: 40px; background: #fff; border-radius: 8px; padding: 2px; }
+  .stats { display: flex; flex-wrap: wrap; gap: 8px; }
+  .stat { background: rgba(255,255,255,.14); border: 1px solid rgba(255,255,255,.28); border-radius: 10px; padding: 4px 12px; text-align: center; min-width: 74px; }
+  .stat b { display: block; font-size: 18px; }
+  .stat span { font-size: 11px; color: rgba(255,255,255,.85); }
+  .spacer { flex: 1; }
+  .btn { padding: 8px 14px; border-radius: 16px; border: 1px solid #999; background: #fff; font-weight: 600; color: #222; }
+  header .btn { border-color: rgba(255,255,255,.6); }
+  .btn.on { background: #ffd54f; border-color: #ffd54f; color: #222; }
+  .btn.gold { background: #ffd54f; border-color: #ffd54f; }
+  main { flex: 1; min-height: 0; display: grid; grid-template-columns: 400px 1fr; }
+  #side { overflow-y: auto; padding: 12px; border-right: 1px solid var(--line);
+    background: linear-gradient(rgba(255,255,255,.94), rgba(255,255,255,.94)), url(logo.png) center 92% / 90% no-repeat, #fff; }
+  #map { height: 100%; width: 100%; }
+  .count { color: #666; font-size: 13px; margin: 0 0 8px; }
+  .item { display: flex; gap: 10px; align-items: flex-start; padding: 10px; border: 1px solid var(--line); border-radius: 10px; margin-bottom: 8px; cursor: pointer; background: rgba(255,255,255,.85); }
+  .item:hover { background: #f1faf5; }
+  .dot { width: 14px; height: 14px; border-radius: 50%; margin-top: 3px; flex: none; }
+  .dot.red { background: var(--red); } .dot.green { background: var(--green); }
+  .sub { color: #666; font-size: 13px; }
+  .back { border: 0; background: none; color: var(--blue); font-weight: 600; padding: 0 0 8px; }
+  h2 { margin: 4px 0; font-size: 19px; }
+  h3 { margin: 16px 0 6px; font-size: 15px; color: var(--dark); }
+  .pill { display: inline-block; padding: 2px 10px; border-radius: 12px; font-size: 12px; font-weight: 700; color: #fff; margin-right: 6px; }
+  .pill.illegal, .pill.red { background: var(--red); } .pill.legal { background: var(--blue); }
+  .pill.green { background: var(--green); } .pill.orange { background: var(--orange); } .pill.grey { background: var(--grey); }
+  .photos { display: flex; gap: 10px; }
+  .photos figure { flex: 1; margin: 0; text-align: center; }
+  .photos img, .check img { width: 100%; height: 130px; object-fit: cover; border-radius: 8px; background: #ddd; cursor: zoom-in; }
+  figcaption { font-weight: 700; font-size: 13px; padding: 4px 0; }
+  .check { display: flex; gap: 10px; align-items: center; border: 1px solid var(--line); border-radius: 10px; padding: 8px; margin-bottom: 8px; background: rgba(255,255,255,.85); }
+  .check img { width: 76px; height: 76px; flex: none; }
+
+  .modal { position: fixed; inset: 0; background: rgba(0,0,0,.55); z-index: 3000; display: none; align-items: center; justify-content: center; padding: 16px; }
+  .modal-card { background: #fff; border-radius: 16px; width: 100%; max-width: 520px; max-height: 92vh; overflow-y: auto; padding: 18px; box-shadow: 0 20px 50px rgba(0,0,0,.35); }
+  .modal-head { display: flex; align-items: center; justify-content: space-between; }
+  .modal-head h2 { margin: 0; color: var(--dark); }
+  .big { text-align: center; padding: 14px 0 4px; }
+  .big b { font-size: 54px; color: var(--green); display: block; line-height: 1; }
+  .big span { color: #555; }
+  .pickers { display: flex; gap: 10px; margin: 14px 0 8px; }
+  .pickers label { flex: 1; font-size: 13px; color: #555; display: block; }
+  .pickers select { width: 100%; padding: 9px; margin-top: 4px; border: 1px solid #bbb; border-radius: 8px; background: #fff; }
+  .result { background: #f1faf5; border: 1px solid #cfe8d9; border-radius: 10px; padding: 12px; margin-bottom: 10px; }
+  .result b { color: var(--green); font-size: 20px; }
+  .row { display: flex; align-items: center; gap: 8px; padding: 4px 6px; border-radius: 6px; font-size: 14px; }
+  .row.hl { background: #fff8e1; font-weight: 700; }
+  .row .lab { width: 92px; flex: none; }
+  .row .bar { flex: 1; height: 10px; background: #e8efe9; border-radius: 6px; overflow: hidden; }
+  .row .bar i { display: block; height: 100%; background: linear-gradient(90deg, var(--mid), #47b52a); }
+  .row .num { width: 34px; text-align: right; flex: none; }
+
+  #lightbox { position: fixed; inset: 0; background: rgba(0,0,0,.93); z-index: 4000; display: none; flex-direction: column; }
+  #lbBar { display: flex; gap: 8px; align-items: center; padding: 10px; color: #fff; }
+  #lbBar .btn { background: #333; color: #fff; border-color: #555; }
+  #lbStage { flex: 1; display: flex; align-items: center; justify-content: center; overflow: hidden; }
+  #lbImg { max-width: 100%; max-height: 100%; touch-action: none; user-select: none; -webkit-user-drag: none; cursor: grab; }
+
+  @media (max-width: 800px) {
+    main { grid-template-columns: 1fr; grid-template-rows: 48% 52%; }
+    #map { order: -1; }
+    #side { border-right: 0; border-top: 1px solid var(--line); }
+  }
+</style>
+</head>
+<body>
+
+<div id="login">
+  <form class="login-box" id="loginForm">
+    <img src="logo.png" alt="Drump" onerror="this.style.display='none'">
+    <p>Ministry Dashboard</p>
+    <input id="email" type="email" placeholder="Email" autocomplete="username" required>
+    <input id="password" type="password" placeholder="Password" autocomplete="current-password" required>
+    <button type="submit">Sign In</button>
+    <div id="loginMsg"></div>
+  </form>
+</div>
+
+<div id="app">
+  <header>
+    <div class="brand"><img src="logo.png" alt="" onerror="this.style.display='none'">Drump · Ministry Dashboard</div>
+    <div class="stats" id="stats"></div>
+    <div class="spacer"></div>
+    <button class="btn gold" id="allTime">All-Time Cleared · <b id="allTimeN">0</b></button>
+    <button class="btn" id="fLegal">Authorized</button>
+    <button class="btn" id="fIllegal">Unauthorized</button>
+    <button class="btn" id="refresh">Refresh</button>
+    <button class="btn" id="signOut">Sign Out</button>
+  </header>
+  <main>
+    <div id="side"></div>
+    <div id="map"></div>
+  </main>
+</div>
+
+<div class="modal" id="statsModal">
+  <div class="modal-card">
+    <div class="modal-head">
+      <h2>Cleared Sites</h2>
+      <button class="btn" id="smClose">Close</button>
+    </div>
+    <div class="big"><b id="smAll">0</b><span>sites cleared, all time</span></div>
+    <div class="sub" id="smAllEvents" style="text-align:center"></div>
+    <div class="pickers">
+      <label>Year <select id="smYear"></select></label>
+      <label>Month <select id="smMonth"></select></label>
+    </div>
+    <div class="result" id="smResult"></div>
+    <div id="smTable"></div>
+  </div>
+</div>
+
+<div id="lightbox">
+  <div id="lbBar">
+    <b id="lbLabel" style="flex:1"></b>
+    <button class="btn" id="lbMinus">−</button>
+    <button class="btn" id="lbPlus">+</button>
+    <button class="btn" id="lbReset">Reset</button>
+    <button class="btn" id="lbClose">Close</button>
+  </div>
+  <div id="lbStage"><img id="lbImg" alt=""></div>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
+<script>
+const SUPABASE_URL = 'https://zmsepbcridilepbyerqu.supabase.co';
+const SUPABASE_ANON_KEY = 'sb_publishable_7IOmhdNwj2CvjBkVOp11WA_ba9L3gxn';
+const db = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+let sites = [], checksBySite = {}, totalDumped = 0;
+let filter = null, selectedId = null;
+let map = null, markers = {}, refreshTimer = null, firstFit = true;
+
+const KIND = {
+  mapped: ['Mapped', 'grey'],
+  cleared: ['Cleared', 'green'],
+  not_cleared: ['Not Cleared', 'red'],
+  dumped_again: ['Dumped Again', 'orange'],
+};
+const LEG = { legal: 'Authorized', illegal: 'Unauthorized' };
+const MONTHS = Array.from({ length: 12 }, (_, i) => new Date(2000, i, 1).toLocaleString(undefined, { month: 'long' }));
+
+const $ = (id) => document.getElementById(id);
+const esc = (v) => String(v ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const cap = (v) => { const s = String(v ?? ''); return s.charAt(0).toUpperCase() + s.slice(1); };
+const fmtDate = (iso) => iso ? new Date(iso).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' }) : '';
+const fmtDateTime = (iso) => iso ? new Date(iso).toLocaleString() : '';
+
+/* newest photo = After, the photo before it = Before, older photos = history */
+function timelineOf(site) {
+  const list = [{ url: site.photo_url, at: site.created_at, kind: 'mapped' }];
+  (checksBySite[site.id] || []).forEach((c) => list.push({ url: c.photo_url, at: c.created_at, kind: c.result, check: c }));
+  if (site.cleared_photo_url && !list.some((x) => x.url === site.cleared_photo_url)) {
+    list.push({ url: site.cleared_photo_url, at: site.cleared_at, kind: 'cleared' });
+  }
+  list.sort((a, b) => new Date(a.at || 0) - new Date(b.at || 0));
+  return list;
+}
+
+/* every time a site was cleared, as a list of events */
+function clearedEvents() {
+  const ev = [];
+  sites.forEach((s) => {
+    const cs = (checksBySite[s.id] || []).filter((c) => c.result === 'cleared');
+    cs.forEach((c) => ev.push({ siteId: s.id, at: new Date(c.created_at) }));
+    if (s.cleared_photo_url && s.cleared_at && !cs.some((c) => c.photo_url === s.cleared_photo_url)) {
+      ev.push({ siteId: s.id, at: new Date(s.cleared_at) });
+    }
+  });
+  return ev;
+}
+const countSites = (events) => new Set(events.map((e) => e.siteId)).size;
+
+/* ---------- login ---------- */
+function showLogin(msg) {
+  $('login').style.display = 'flex';
+  $('app').style.display = 'none';
+  $('loginMsg').textContent = msg || '';
+}
+
+async function enter() {
+  const { data: u } = await db.auth.getUser();
+  const user = u && u.user;
+  if (!user) return showLogin();
+  const { data: prof } = await db.from('profiles').select('role').eq('id', user.id).maybeSingle();
+  if (!prof || !['ministry', 'admin'].includes(prof.role)) {
+    await db.auth.signOut();
+    return showLogin('This account does not have Ministry access.');
+  }
+  $('login').style.display = 'none';
+  $('app').style.display = 'flex';
+  initMap();
+  await loadAll();
+  clearInterval(refreshTimer);
+  refreshTimer = setInterval(loadAll, 30000);
+}
+
+$('loginForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  $('loginMsg').textContent = 'Signing in…';
+  const { error } = await db.auth.signInWithPassword({ email: $('email').value.trim(), password: $('password').value });
+  if (error) { $('loginMsg').textContent = error.message; return; }
+  await enter();
+});
+
+$('signOut').onclick = async () => {
+  await db.auth.signOut();
+  clearInterval(refreshTimer);
+  showLogin();
+};
+
+/* ---------- map ---------- */
+function initMap() {
+  if (map) { setTimeout(() => map.invalidateSize(), 50); return; }
+  map = L.map('map').setView([12.9908, 7.6018], 12);
+  const imagery = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { maxZoom: 19, attribution: 'Imagery © Esri, Maxar, Earthstar Geographics' });
+  const labels = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}', { maxZoom: 19, attribution: 'Labels © Esri' });
+  const satellite = L.layerGroup([imagery, labels]).addTo(map);
+  const street = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '© OpenStreetMap contributors' });
+  L.control.layers({ 'Satellite + labels': satellite, 'Street map': street }).addTo(map);
+}
+
+/* ---------- data ---------- */
+async function loadAll() {
+  const [s, c] = await Promise.all([
+    db.from('sites').select('*').order('created_at', { ascending: false }),
+    db.from('site_checks').select('*').order('created_at', { ascending: true }),
+  ]);
+  if (s.error) { alert('Could not load sites: ' + s.error.message); return; }
+  sites = s.data || [];
+  checksBySite = {};
+  totalDumped = 0;
+  (c.data || []).forEach((x) => {
+    (checksBySite[x.site_id] = checksBySite[x.site_id] || []).push(x);
+    if (x.result === 'dumped_again') totalDumped++;
+  });
+  render();
+  if ($('statsModal').style.display === 'flex') updateStatsResult();
+}
+
+const visibleSites = () => sites.filter((s) => !filter || s.legality === filter);
+const dumpedCount = (siteId) => (checksBySite[siteId] || []).filter((x) => x.result === 'dumped_again').length;
+
+function render() {
+  renderStats();
+  $('fLegal').classList.toggle('on', filter === 'legal');
+  $('fIllegal').classList.toggle('on', filter === 'illegal');
+  $('allTimeN').textContent = countSites(clearedEvents());
+  renderMarkers();
+  renderSide();
+}
+
+function renderStats() {
+  const cleared = sites.filter((s) => s.status === 'cleared').length;
+  const items = [
+    ['Total Sites', sites.length],
+    ['Cleared Now', cleared],
+    ['Not Cleared', sites.length - cleared],
+    ['Authorized', sites.filter((s) => s.legality === 'legal').length],
+    ['Unauthorized', sites.filter((s) => s.legality === 'illegal').length],
+    ['Dumped Again', totalDumped],
+  ];
+  $('stats').innerHTML = items.map(([label, n]) => `<div class="stat"><b>${n}</b><span>${label}</span></div>`).join('');
+}
+
+function renderMarkers() {
+  Object.values(markers).forEach((m) => m.remove());
+  markers = {};
+  const vis = visibleSites();
+  vis.forEach((s) => {
+    const cleared = s.status === 'cleared';
+    const isSel = s.id === selectedId;
+    const m = L.circleMarker([s.latitude, s.longitude], {
+      radius: isSel ? 13 : 10,
+      color: isSel ? '#ffd600' : '#fff',
+      weight: isSel ? 4 : 2,
+      fillColor: cleared ? '#1b7f4b' : '#c62828',
+      fillOpacity: 1,
+    }).addTo(map);
+    m.on('click', () => select(s.id));
+    markers[s.id] = m;
+  });
+  if (firstFit && vis.length) {
+    map.fitBounds(L.latLngBounds(vis.map((s) => [s.latitude, s.longitude])).pad(0.2), { maxZoom: 16 });
+    firstFit = false;
+  }
+}
+
+function select(id) {
+  selectedId = id;
+  const s = sites.find((x) => x.id === id);
+  if (s && map) map.setView([s.latitude, s.longitude], Math.max(map.getZoom(), 16));
+  renderMarkers();
+  renderSide();
+}
+
+/* ---------- side panel ---------- */
+function figureHtml(label, shot) {
+  const [kindText, kindColor] = KIND[shot.kind];
+  const caption = `${label} · ${fmtDate(shot.at)}`;
+  return `<figure>
+    <img class="zoomable" src="${esc(shot.url)}" data-src="${esc(shot.url)}" data-label="${esc(caption)}">
+    <figcaption>${esc(caption)}</figcaption>
+    <span class="pill ${kindColor}">${kindText}</span>
+  </figure>`;
+}
+
+function renderSide() {
+  const side = $('side');
+  const vis = visibleSites();
+  const site = vis.find((s) => s.id === selectedId);
+  if (!site) {
+    selectedId = null;
+    side.innerHTML =
+      `<p class="count">Showing ${vis.length} of ${sites.length} sites${filter ? ' (' + LEG[filter].toLowerCase() + ' only)' : ''}</p>` +
+      (vis.map((s) => {
+        const area = [s.ward, s.lga].filter(Boolean).join(', ') || 'No area entered';
+        const again = dumpedCount(s.id);
+        return `<div class="item" data-id="${esc(s.id)}">
+          <span class="dot ${s.status === 'cleared' ? 'green' : 'red'}"></span>
+          <div><b>${esc(cap(s.waste))} waste · ${esc(cap(s.size))}</b>
+          <div class="sub">${esc(area)}</div>
+          <div class="sub">${esc(LEG[s.legality] || 'Unclassified')} · Mapped ${esc(fmtDate(s.created_at))} · ${s.status === 'cleared' ? 'Cleared' : 'Not cleared'}${again ? ' · Dumped again ×' + again : ''}</div></div>
+        </div>`;
+      }).join('') || '<p>No sites to show.</p>');
+    return;
+  }
+
+  const tl = timelineOf(site);
+  const after = tl.length > 1 ? tl[tl.length - 1] : null;
+  const before = tl.length > 1 ? tl[tl.length - 2] : tl[0];
+  const cleared = site.status === 'cleared';
+  const area = [site.ward, site.lga].filter(Boolean).join(', ') || 'No area entered';
+
+  side.innerHTML = `
+    <button class="back" id="backBtn">← All Sites</button>
+    <h2>${esc(cap(site.waste))} waste · ${esc(cap(site.size))}</h2>
+    <div>
+      ${site.legality ? `<span class="pill ${esc(site.legality)}">${LEG[site.legality]} dump site</span>` : ''}
+      <span class="pill ${cleared ? 'green' : 'red'}">${cleared ? 'Cleared' : 'Not cleared'}</span>
+    </div>
+    <p class="sub">${esc(area)}<br>${site.latitude.toFixed(5)}, ${site.longitude.toFixed(5)}</p>
+    <h3>Remarks</h3>
+    <div>${esc((site.notes || '').trim() || 'No remarks')}</div>
+    <h3>Latest Comparison</h3>
+    <div class="photos">
+      ${figureHtml('Before', before)}
+      ${after ? figureHtml('After', after) : ''}
+    </div>
+    <h3>Full Photo History (${tl.length}), Newest First</h3>
+    ${tl.slice().reverse().map((shot) => {
+      const [kindText, kindColor] = KIND[shot.kind];
+      const c = shot.check;
+      const label = `${kindText} · ${fmtDateTime(shot.at)}`;
+      return `<div class="check">
+        <img class="zoomable" src="${esc(shot.url)}" data-src="${esc(shot.url)}" data-label="${esc(label)}">
+        <div>
+          <span class="pill ${kindColor}">${kindText}</span>
+          <div>${esc(fmtDateTime(shot.at))}</div>
+          ${c ? `<div class="sub">Team member was ${c.distance_m != null ? '~' + Math.round(c.distance_m) + ' m' : 'an unknown distance'} from the pin${c.gps_accuracy_m != null ? ' · GPS ±' + Math.round(c.gps_accuracy_m) + ' m' : ''}</div>` : ''}
+        </div>
+      </div>`;
+    }).join('')}
+  `;
+  $('backBtn').onclick = () => { selectedId = null; renderMarkers(); renderSide(); };
+}
+
+/* ---------- cleared sites panel ---------- */
+function openStats() {
+  const ev = clearedEvents();
+  const years = [...new Set(ev.map((e) => e.at.getFullYear()))].sort((a, b) => b - a);
+  $('smYear').innerHTML = '<option value="all">All years</option>' + years.map((y) => `<option value="${y}">${y}</option>`).join('');
+  $('smMonth').innerHTML = '<option value="all">All months</option>' + MONTHS.map((n, i) => `<option value="${i}">${n}</option>`).join('');
+  $('smYear').value = 'all';
+  $('smMonth').value = 'all';
+  $('statsModal').style.display = 'flex';
+  updateStatsResult();
+}
+
+function updateStatsResult() {
+  const ev = clearedEvents();
+  const y = $('smYear').value, m = $('smMonth').value;
+  $('smAll').textContent = countSites(ev);
+  $('smAllEvents').textContent = `${ev.length} cleanups in total (a site cleared more than once counts each time)`;
+
+  let sel = ev;
+  if (y !== 'all') sel = sel.filter((e) => String(e.at.getFullYear()) === y);
+  if (m !== 'all') sel = sel.filter((e) => String(e.at.getMonth()) === m);
+  const label = [m !== 'all' ? MONTHS[+m] : null, y !== 'all' ? y : null].filter(Boolean).join(' ') || 'All time';
+  $('smResult').innerHTML = `<b>${countSites(sel)}</b> sites cleared · <b>${sel.length}</b> cleanups<div class="sub">${esc(label)}</div>`;
+
+  let rows = [];
+  if (y === 'all') {
+    const yrs = [...new Set(ev.map((e) => e.at.getFullYear()))].sort((a, b) => a - b);
+    rows = yrs.map((yr) => ({
+      lab: String(yr),
+      n: countSites(ev.filter((e) => e.at.getFullYear() === yr)),
+      hl: false,
+    }));
+  } else {
+    rows = MONTHS.map((name, i) => ({
+      lab: name,
+      n: countSites(ev.filter((e) => String(e.at.getFullYear()) === y && e.at.getMonth() === i)),
+      hl: m !== 'all' && +m === i,
+    }));
+  }
+  const max = Math.max(1, ...rows.map((r) => r.n));
+  $('smTable').innerHTML = rows.length
+    ? rows.map((r) => `<div class="row ${r.hl ? 'hl' : ''}"><span class="lab">${esc(r.lab)}</span><span class="bar"><i style="width:${(r.n / max) * 100}%"></i></span><span class="num">${r.n}</span></div>`).join('')
+    : '<p class="sub">No cleanups recorded yet.</p>';
+}
+
+$('allTime').onclick = openStats;
+$('smClose').onclick = () => { $('statsModal').style.display = 'none'; };
+$('smYear').onchange = updateStatsResult;
+$('smMonth').onchange = updateStatsResult;
+$('statsModal').addEventListener('click', (e) => { if (e.target === $('statsModal')) $('statsModal').style.display = 'none'; });
+
+/* ---------- filters and buttons ---------- */
+$('fLegal').onclick = () => { filter = filter === 'legal' ? null : 'legal'; selectedId = null; render(); };
+$('fIllegal').onclick = () => { filter = filter === 'illegal' ? null : 'illegal'; selectedId = null; render(); };
+$('refresh').onclick = loadAll;
+
+/* ---------- photo zoom ---------- */
+let z = 1, px = 0, py = 0, drag = null;
+const applyZoom = () => { $('lbImg').style.transform = `translate(${px}px, ${py}px) scale(${z})`; };
+function openPhoto(url, label) {
+  z = 1; px = 0; py = 0;
+  $('lbImg').src = url;
+  $('lbLabel').textContent = label || '';
+  $('lightbox').style.display = 'flex';
+  applyZoom();
+}
+function closePhoto() { $('lightbox').style.display = 'none'; $('lbImg').src = ''; }
+$('lbPlus').onclick = () => { z = Math.min(8, z * 1.4); applyZoom(); };
+$('lbMinus').onclick = () => { z = Math.max(1, z / 1.4); if (z === 1) { px = 0; py = 0; } applyZoom(); };
+$('lbReset').onclick = () => { z = 1; px = 0; py = 0; applyZoom(); };
+$('lbClose').onclick = closePhoto;
+$('lbStage').addEventListener('wheel', (e) => {
+  e.preventDefault();
+  z = Math.min(8, Math.max(1, z * (e.deltaY < 0 ? 1.15 : 1 / 1.15)));
+  if (z === 1) { px = 0; py = 0; }
+  applyZoom();
+}, { passive: false });
+$('lbImg').addEventListener('pointerdown', (e) => { drag = { x: e.clientX - px, y: e.clientY - py }; $('lbImg').setPointerCapture(e.pointerId); });
+$('lbImg').addEventListener('pointermove', (e) => { if (drag && z > 1) { px = e.clientX - drag.x; py = e.clientY - drag.y; applyZoom(); } });
+$('lbImg').addEventListener('pointerup', () => { drag = null; });
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closePhoto(); });
+
+document.addEventListener('click', (e) => {
+  const img = e.target.closest('.zoomable');
+  if (img) { openPhoto(img.dataset.src, img.dataset.label); return; }
+  const item = e.target.closest('.item[data-id]');
+  if (item) select(item.dataset.id);
+});
+
+/* ---------- start ---------- */
+(async () => {
+  const { data } = await db.auth.getSession();
+  if (data && data.session) await enter(); else showLogin();
+})();
+</script>
+</body>
+</html>
