@@ -1,0 +1,908 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Drump">
+<meta name="theme-color" content="#02543e">
+<link rel="apple-touch-icon" href="logo.png">
+<title>Drump · Field</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<style>
+  :root { --green:#1b7f4b; --dark:#02543e; --red:#c62828; --orange:#e65100; --blue:#1565c0; --grey:#546e7a; --line:#dfe8e2;
+          --top: env(safe-area-inset-top, 0px); --bottom: env(safe-area-inset-bottom, 0px); }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; overflow: hidden; font-family: -apple-system, system-ui, 'Segoe UI', Roboto, sans-serif; color: #222; background: #f6faf7; }
+  button, input, textarea { font: inherit; }
+  button { cursor: pointer; border: 0; }
+  .hidden { display: none !important; }
+  body.worker .team-only { display: none !important; }
+
+  #login { position: fixed; inset: 0; z-index: 5000; display: flex; align-items: center; justify-content: center; padding: 16px; background: linear-gradient(160deg, #02543e 0%, #0b8b50 55%, #47b52a 100%); }
+  .login-box { background: #fff; border-radius: 16px; padding: 24px; width: 100%; max-width: 380px; text-align: center; box-shadow: 0 20px 50px rgba(0,0,0,.3); }
+  .login-box img { width: 220px; max-width: 100%; display: block; margin: -16px auto -18px; }
+  .login-box p { color: #666; margin: 0 0 14px; font-size: 14px; }
+  .login-box input { width: 100%; padding: 12px; margin-bottom: 10px; border: 1px solid #bbb; border-radius: 8px; font-size: 16px; }
+  .login-box button { width: 100%; padding: 12px; background: var(--green); color: #fff; border-radius: 8px; font-weight: 600; font-size: 16px; }
+  #loginMsg { color: var(--red); font-size: 13px; min-height: 18px; margin-top: 10px; }
+
+  #app { position: fixed; inset: 0; }
+  #topbar { position: fixed; top: 0; left: 0; right: 0; z-index: 1000; height: calc(56px + var(--top)); padding: var(--top) 10px 0; display: flex; align-items: center; gap: 8px; color: #fff; background: linear-gradient(90deg, #02543e, #0b8b50); box-shadow: 0 2px 8px rgba(0,0,0,.2); }
+  #topbar .title { flex: 1; min-width: 0; font-weight: 700; font-size: 17px; line-height: 1.2; }
+  #topbar .sub2 { display: block; font-size: 11px; font-weight: 400; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .iconbtn { width: 40px; height: 40px; flex: none; border-radius: 20px; background: rgba(255,255,255,.2); color: #fff; font-size: 17px; display: flex; align-items: center; justify-content: center; }
+  .iconbtn.dark { background: #eceff1; color: #222; }
+  .pillbtn { flex: none; background: rgba(255,255,255,.2); color: #fff; padding: 8px 12px; border-radius: 16px; font-size: 13px; font-weight: 600; }
+
+  #searchRow { position: fixed; top: calc(62px + var(--top)); left: 10px; right: 10px; z-index: 999; background: #fff; border-radius: 12px; padding: 8px; box-shadow: 0 4px 14px rgba(0,0,0,.25); display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+  #searchInput { flex: 1; min-width: 0; padding: 10px 12px; border: 1px solid #bbb; border-radius: 10px; font-size: 16px; }
+  #searchRow .iconbtn { background: #eceff1; color: #222; }
+  #searchCount { flex-basis: 100%; font-size: 12px; color: #555; padding: 0 4px; }
+
+  #map { position: fixed; top: calc(56px + var(--top)); left: 0; right: 0; bottom: calc(64px + var(--bottom)); }
+
+  #bottombar { position: fixed; left: 0; right: 0; bottom: 0; z-index: 1000; height: calc(64px + var(--bottom)); padding: 9px 10px calc(9px + var(--bottom)); display: flex; align-items: center; gap: 6px; background: #fff; border-top: 1px solid var(--line); overflow-x: auto; }
+  .chip { flex: none; padding: 8px 9px; border: 1px solid #999; border-radius: 16px; background: #fff; font-size: 12px; font-weight: 600; white-space: nowrap; }
+  .chip.on { background: var(--green); border-color: var(--green); color: #fff; }
+  .gobtn { flex: none; margin-left: auto; padding: 9px 12px; border-radius: 16px; background: var(--green); color: #fff; font-size: 13px; font-weight: 700; white-space: nowrap; }
+
+  #card { position: fixed; left: 10px; right: 10px; bottom: calc(74px + var(--bottom)); z-index: 1100; max-height: 60vh; overflow-y: auto; background: #fff; border-radius: 14px; padding: 12px; box-shadow: 0 10px 30px rgba(0,0,0,.3); }
+  .cardhead { display: flex; align-items: flex-start; gap: 8px; }
+  .cardhead > div { flex: 1; min-width: 0; }
+  .ctitle { font-weight: 700; font-size: 16px; }
+  .sub { color: #666; font-size: 13px; }
+  .pills { margin: 6px 0; display: flex; flex-wrap: wrap; gap: 6px; }
+  .pill { display: inline-block; padding: 2px 10px; border-radius: 12px; font-size: 12px; font-weight: 700; color: #fff; }
+  .pill.red { background: var(--red); } .pill.blue { background: var(--blue); } .pill.green { background: var(--green); } .pill.orange { background: var(--orange); } .pill.grey { background: var(--grey); }
+  .photos { display: flex; gap: 10px; margin-top: 6px; }
+  .ph { flex: 1; min-width: 0; margin: 0; text-align: center; }
+  .ph img { width: 100%; height: 120px; object-fit: cover; border-radius: 8px; background: #ddd; display: block; }
+  .ph figcaption { font-weight: 700; font-size: 13px; padding-top: 4px; }
+  .remarks { margin: 8px 0 2px; font-size: 14px; }
+  .btn { display: block; width: 100%; margin-top: 8px; padding: 12px; border-radius: 10px; background: #333; color: #fff; font-weight: 600; font-size: 15px; text-align: center; }
+  .btn.green { background: var(--green); } .btn.red { background: var(--red); } .btn.orange { background: var(--orange); }
+  .btn.light { background: #fff; color: #222; border: 1px solid #999; }
+  .btn:disabled { opacity: .6; }
+
+  .sheet { position: fixed; inset: 0; z-index: 2000; overflow-y: auto; background: #f6faf7; padding: calc(12px + var(--top)) 16px calc(28px + var(--bottom)); }
+  .sheetHead { display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px; }
+  .sheetHead h2 { margin: 0; font-size: 20px; color: var(--dark); }
+  .hint { color: #444; font-size: 14px; }
+  .label { font-weight: 700; margin: 16px 0 4px; font-size: 14px; color: var(--dark); }
+  .opts { display: flex; flex-wrap: wrap; gap: 8px; }
+  .opt { padding: 8px 12px; border: 1px solid #999; border-radius: 16px; background: #fff; font-size: 14px; }
+  .opt.on { background: var(--green); border-color: var(--green); color: #fff; }
+  .field { display: block; width: 100%; margin-top: 8px; padding: 11px; border: 1px solid #bbb; border-radius: 10px; font-size: 16px; background: #fff; }
+  textarea.field { min-height: 80px; }
+  .preview { width: 100%; height: 200px; object-fit: cover; border-radius: 10px; margin-top: 8px; }
+
+  #viewer { position: fixed; inset: 0; z-index: 3000; background: rgba(0,0,0,.96); display: flex; flex-direction: column; }
+  #viewerBar { display: flex; align-items: center; gap: 8px; padding: calc(10px + var(--top)) 12px 10px; color: #fff; }
+  #viewerBar b { flex: 1; font-size: 15px; }
+  #viewerBar button { background: #333; color: #fff; padding: 8px 12px; border-radius: 16px; font-weight: 600; }
+  #viewerStage { flex: 1; overflow: hidden; display: flex; align-items: center; justify-content: center; touch-action: none; }
+  #viewerImg { max-width: 100%; max-height: 100%; object-fit: contain; user-select: none; -webkit-user-drag: none; transform-origin: center center; }
+</style>
+</head>
+<body>
+
+<div id="login">
+  <form class="login-box" id="loginForm">
+    <img src="logo.png" alt="Drump" onerror="this.style.display='none'">
+    <p>Field App · Drump Team and Workers</p>
+    <input id="email" type="email" placeholder="Email" autocomplete="username" required>
+    <input id="password" type="password" placeholder="Password" autocomplete="current-password" required>
+    <button type="submit">Sign In</button>
+    <div id="loginMsg"></div>
+  </form>
+</div>
+
+<div id="app" class="hidden">
+  <div id="topbar">
+    <button class="iconbtn" id="searchBtn" aria-label="Search">🔍</button>
+    <div class="title">Drump<span class="sub2"><span id="roleLabel"></span> · <span id="gps">GPS waiting…</span></span></div>
+    <button class="pillbtn" id="signOut">Sign Out</button>
+  </div>
+
+  <div id="searchRow" class="hidden">
+    <input id="searchInput" type="search" placeholder="Search by ward, LGA or remarks" autocomplete="off">
+    <button class="iconbtn" id="searchClose" aria-label="Close search">✕</button>
+    <div id="searchCount"></div>
+  </div>
+
+  <div id="map"></div>
+
+  <div id="bottombar">
+    <button class="chip on team-only" data-filter="all">All</button>
+    <button class="chip team-only" data-filter="legal">Authorized</button>
+    <button class="chip team-only" data-filter="illegal">Unauthorized</button>
+    <button class="chip" data-bar="center">📍</button>
+    <button class="gobtn team-only" data-bar="mapsite">+ Map</button>
+  </div>
+
+  <div id="card" class="hidden"></div>
+  <div id="mapSheet" class="sheet hidden"></div>
+  <div id="review" class="sheet hidden"></div>
+
+  <div id="viewer" class="hidden">
+    <div id="viewerBar"><b id="viewerLabel"></b><button id="viewerClose">Close</button></div>
+    <div id="viewerStage"><img id="viewerImg" alt=""></div>
+  </div>
+
+  <input type="file" id="camera" accept="image/*" capture="environment" style="position:fixed;left:-1000px;top:0;opacity:0;width:1px;height:1px">
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
+<script>
+const SUPABASE_URL = 'https://zmsepbcridilepbyerqu.supabase.co';
+const SUPABASE_ANON_KEY = 'sb_publishable_7IOmhdNwj2CvjBkVOp11WA_ba9L3gxn';
+const ORS_KEY = 'eyJvcmciOiI1YjNjZTM1OTc4NTExMTAwMDFjZjYyNDgiLCJpZCI6IjVjZDE5NDA5ZjI4OTQxNWI5MGYzZmY4MjZjM2FiYzJlIiwiaCI6Im11cm11cjY0In0=';
+const WASTE = ['household', 'plastic', 'construction', 'market', 'hazardous', 'mixed'];
+const SIZES = ['small', 'medium', 'large'];
+const LEG = { legal: 'Authorized', illegal: 'Unauthorized' };
+const KIND = {
+  mapped: ['Mapped', 'grey'],
+  cleared: ['Cleared', 'green'],
+  not_cleared: ['Not Cleared', 'red'],
+  dumped_again: ['Dumped Again', 'orange'],
+};
+
+const db = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+let me = null, mode = 'worker';
+let sites = [], checksBySite = {};
+let myLoc = null, watchId = null, firstFit = true;
+let map = null, siteLayer = null, routeLayer = null, myDot = null, myRing = null;
+let legalFilter = null, query = '', selectedId = null, searchTimer = null, pollTimer = null;
+let routeInfo = null, review = null, draft = null, pickCb = null;
+let vz = 1, vx = 0, vy = 0;
+
+const $ = (id) => document.getElementById(id);
+const esc = (v) => String(v ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const cap = (v) => { const s = String(v ?? ''); return s.charAt(0).toUpperCase() + s.slice(1); };
+const fmtDate = (iso) => iso ? new Date(iso).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' }) : '';
+
+function distanceM(lat1, lon1, lat2, lon2) {
+  const R = 6371000;
+  const t = (d) => (d * Math.PI) / 180;
+  const dLat = t(lat2 - lat1), dLon = t(lon2 - lon1);
+  const a = Math.sin(dLat / 2) ** 2 + Math.cos(t(lat1)) * Math.cos(t(lat2)) * Math.sin(dLon / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(a));
+}
+
+function timelineOf(site) {
+  const list = [{ url: site.photo_url, at: site.created_at, kind: 'mapped' }];
+  (checksBySite[site.id] || []).forEach((c) => list.push({ url: c.photo_url, at: c.created_at, kind: c.result }));
+  if (site.cleared_photo_url && !list.some((x) => x.url === site.cleared_photo_url)) {
+    list.push({ url: site.cleared_photo_url, at: site.cleared_at, kind: 'cleared' });
+  }
+  list.sort((a, b) => new Date(a.at || 0) - new Date(b.at || 0));
+  return list;
+}
+
+function figure(label, shot) {
+  const caption = `${label} · ${fmtDate(shot.at)}`;
+  const [kt, kc] = KIND[shot.kind];
+  return `<figure class="ph" data-zoom="${esc(shot.url)}" data-label="${esc(caption)}">
+    <img src="${esc(shot.url)}" alt="">
+    <figcaption>${esc(caption)}</figcaption>
+    <span class="pill ${kc}">${kt}</span>
+  </figure>`;
+}
+
+/* ---------- sign in ---------- */
+function showLogin(msg) {
+  $('app').classList.add('hidden');
+  $('login').classList.remove('hidden');
+  $('loginMsg').textContent = msg || '';
+}
+
+async function boot() {
+  const { data } = await db.auth.getSession();
+  if (data && data.session) await enter(); else showLogin();
+}
+
+$('loginForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  $('loginMsg').textContent = 'Signing in…';
+  const { error } = await db.auth.signInWithPassword({ email: $('email').value.trim(), password: $('password').value });
+  if (error) { $('loginMsg').textContent = error.message; return; }
+  await enter();
+});
+
+async function enter() {
+  const { data: u } = await db.auth.getUser();
+  if (!u || !u.user) return showLogin();
+  me = u.user;
+  const { data: prof } = await db.from('profiles').select('role, full_name').eq('id', me.id).maybeSingle();
+  const role = prof ? prof.role : null;
+  if (role === 'mapper' || role === 'admin') mode = 'team';
+  else if (role === 'worker') mode = 'worker';
+  else {
+    await db.auth.signOut();
+    me = null;
+    return showLogin(role === 'ministry'
+      ? 'Ministry staff: please use the Ministry dashboard link.'
+      : 'This account is not set up for the field app yet.');
+  }
+  document.body.classList.toggle('worker', mode === 'worker');
+  $('roleLabel').textContent = (mode === 'team' ? 'Drump Team' : 'Drump Worker') + (prof && prof.full_name ? ' · ' + prof.full_name : '');
+  $('login').classList.add('hidden');
+  $('app').classList.remove('hidden');
+  initMap();
+  startLocation();
+  await loadAll();
+  clearInterval(pollTimer);
+  pollTimer = setInterval(loadAll, 20000);
+}
+
+$('signOut').onclick = async () => {
+  await db.auth.signOut();
+  location.reload();
+};
+
+document.addEventListener('visibilitychange', () => { if (!document.hidden && me) loadAll(); });
+
+/* ---------- map and location ---------- */
+function initMap() {
+  if (map) { setTimeout(() => map.invalidateSize(), 50); return; }
+  map = L.map('map', { zoomControl: false }).setView([12.9908, 7.6018], 12);
+  const imagery = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { maxZoom: 19, attribution: 'Imagery © Esri' });
+  const labels = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}', { maxZoom: 19 });
+  const satellite = L.layerGroup([imagery, labels]).addTo(map);
+  const street = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '© OpenStreetMap' });
+  L.control.layers({ 'Satellite + labels': satellite, 'Street map': street }, null, { position: 'topright' }).addTo(map);
+  siteLayer = L.layerGroup().addTo(map);
+  routeLayer = L.layerGroup().addTo(map);
+}
+
+function setGps(acc, text) {
+  const el = $('gps');
+  if (acc == null) { el.textContent = text || 'GPS waiting…'; el.style.color = '#fff'; return; }
+  el.textContent = `GPS ±${Math.round(acc)} m`;
+  el.style.color = acc <= 30 ? '#b9f6ca' : acc <= 100 ? '#ffe082' : '#ff8a80';
+}
+
+function startLocation() {
+  if (watchId !== null) return;
+  if (!navigator.geolocation) return setGps(null, 'Location not available');
+  watchId = navigator.geolocation.watchPosition(
+    (p) => {
+      myLoc = { lat: p.coords.latitude, lng: p.coords.longitude, acc: p.coords.accuracy };
+      setGps(myLoc.acc);
+      drawMe();
+    },
+    () => setGps(null, 'Location is off'),
+    { enableHighAccuracy: true, maximumAge: 0, timeout: 30000 }
+  );
+}
+
+function drawMe() {
+  if (!map || !myLoc) return;
+  const ll = [myLoc.lat, myLoc.lng];
+  const r = Math.max(myLoc.acc || 10, 5);
+  if (!myDot) {
+    myDot = L.circleMarker(ll, { radius: 8, color: '#fff', weight: 3, fillColor: '#1677d2', fillOpacity: 1 }).addTo(map);
+    myRing = L.circle(ll, { radius: r, color: '#1677d2', weight: 1, fillColor: '#1677d2', fillOpacity: 0.12 }).addTo(map);
+  } else {
+    myDot.setLatLng(ll);
+    myRing.setLatLng(ll).setRadius(r);
+  }
+}
+
+function centerOnMe() {
+  if (!myLoc || !map) return alert('Waiting for your location. Stand outside with open sky.');
+  map.setView([myLoc.lat, myLoc.lng], 17);
+}
+
+/* ---------- data and markers ---------- */
+async function loadAll() {
+  const [s, c] = await Promise.all([
+    db.from('sites').select('*').order('created_at', { ascending: false }),
+    db.from('site_checks').select('*').order('created_at', { ascending: true }),
+  ]);
+  if (s.error) { console.warn('Could not load sites', s.error.message); return; }
+  sites = s.data || [];
+  checksBySite = {};
+  (c.data || []).forEach((x) => {
+    if (!checksBySite[x.site_id]) checksBySite[x.site_id] = [];
+    checksBySite[x.site_id].push(x);
+  });
+  renderMarkers();
+  renderCard();
+}
+
+const matches = (s, q) => !q || [s.ward, s.lga, s.notes].some((v) => String(v || '').toLowerCase().includes(q));
+
+function visibleSites() {
+  const q = query.trim().toLowerCase();
+  return sites.filter((s) => (mode !== 'team' || !legalFilter || s.legality === legalFilter) && matches(s, q));
+}
+
+function renderMarkers() {
+  if (!siteLayer) return;
+  siteLayer.clearLayers();
+  const list = visibleSites();
+  list.forEach((s) => {
+    const on = s.id === selectedId;
+    const m = L.circleMarker([s.latitude, s.longitude], {
+      radius: on ? 13 : 10,
+      color: on ? '#ffd600' : '#fff',
+      weight: on ? 4 : 2,
+      fillColor: s.status === 'cleared' ? '#1b7f4b' : '#c62828',
+      fillOpacity: 1,
+    });
+    m.on('click', () => selectSite(s.id));
+    siteLayer.addLayer(m);
+  });
+  if (firstFit && list.length) {
+    map.fitBounds(L.latLngBounds(list.map((s) => [s.latitude, s.longitude])).pad(0.2), { maxZoom: 16 });
+    firstFit = false;
+  }
+  updateSearchCount();
+}
+
+function updateSearchCount() {
+  const n = visibleSites().length;
+  $('searchCount').textContent = query.trim() ? `${n} site${n === 1 ? '' : 's'} found` : '';
+}
+
+function selectSite(id) {
+  selectedId = id;
+  routeInfo = null;
+  routeLayer.clearLayers();
+  const s = sites.find((x) => x.id === id);
+  if (s) map.setView([s.latitude, s.longitude], Math.max(map.getZoom(), 16));
+  renderMarkers();
+  renderCard();
+}
+
+function closeCard() {
+  selectedId = null;
+  routeInfo = null;
+  routeLayer.clearLayers();
+  renderMarkers();
+  renderCard();
+}
+
+function renderCard() {
+  const card = $('card');
+  const s = sites.find((x) => x.id === selectedId);
+  if (!s) { card.classList.add('hidden'); card.innerHTML = ''; return; }
+  const tl = timelineOf(s);
+  const after = tl.length > 1 ? tl[tl.length - 1] : null;
+  const before = tl.length > 1 ? tl[tl.length - 2] : tl[0];
+  const cleared = s.status === 'cleared';
+  const again = (checksBySite[s.id] || []).filter((c) => c.result === 'dumped_again').length;
+  const area = [s.ward, s.lga].filter(Boolean).join(', ') || 'No area entered';
+  card.innerHTML = `
+    <div class="cardhead">
+      <div>
+        <div class="ctitle">${cleared ? 'Cleared' : esc(cap(s.waste)) + ' waste · ' + esc(cap(s.size))}</div>
+        <div class="sub">${esc(area)}</div>
+      </div>
+      <button class="iconbtn dark" data-act="close" aria-label="Close">✕</button>
+    </div>
+    <div class="pills">
+      ${s.legality ? `<span class="pill ${s.legality === 'illegal' ? 'red' : 'blue'}">${LEG[s.legality]} dump site</span>` : ''}
+      <span class="pill ${cleared ? 'green' : 'red'}">${cleared ? 'Cleared' : 'Not Cleared'}</span>
+      ${again ? `<span class="pill orange">Dumped Again ×${again}</span>` : ''}
+    </div>
+    <div class="photos">
+      ${figure('Before', before)}
+      ${after ? figure('After', after) : ''}
+    </div>
+    <div class="remarks"><b>Remarks:</b> ${esc((s.notes || '').trim() || 'No remarks')}</div>
+    ${routeInfo ? `<div class="sub">${routeInfo.km} km · about ${routeInfo.min} min by road</div>` : ''}
+    <button class="btn" data-act="directions">Get Directions</button>
+    ${routeInfo ? '<button class="btn light" data-act="stoproute">Stop Route</button>' : ''}
+    ${mode === 'team' && !cleared ? '<button class="btn green" data-act="clear">Mark as Cleared</button>' : ''}
+    ${mode === 'team' && cleared ? '<button class="btn orange" data-act="dump">Dumped Again (Take New Photo)</button>' : ''}
+  `;
+  card.classList.remove('hidden');
+}
+
+$('card').addEventListener('click', (e) => {
+  const b = e.target.closest('[data-act]');
+  if (!b) return;
+  const act = b.dataset.act;
+  if (act === 'close') return closeCard();
+  const s = sites.find((x) => x.id === selectedId);
+  if (!s) return;
+  if (act === 'directions') return getDirections(s);
+  if (act === 'stoproute') { routeLayer.clearLayers(); routeInfo = null; return renderCard(); }
+  if (act === 'clear') return startInspection(s.id, false);
+  if (act === 'dump') return startInspection(s.id, true);
+});
+
+async function getDirections(s) {
+  if (!myLoc || myLoc.acc == null || myLoc.acc > 50) {
+    return alert('Your location is not precise yet. Move outside, wait a few seconds, then try again.');
+  }
+  if (!ORS_KEY || ORS_KEY.startsWith('PASTE_')) {
+    return alert('The routing key has not been added to this file yet.');
+  }
+  try {
+    const res = await fetch('https://api.heigit.org/openrouteservice/v2/directions/driving-car/geojson', {
+      method: 'POST',
+      headers: { Authorization: ORS_KEY, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        coordinates: [[myLoc.lng, myLoc.lat], [s.longitude, s.latitude]],
+        radiuses: [-1, -1],
+      }),
+    });
+    const json = await res.json().catch(() => null);
+    if (!res.ok) throw new Error((json && (json.error?.message || json.message)) || `Request failed (${res.status})`);
+    const f = json && json.features && json.features[0];
+    if (!f || !f.geometry || !f.properties) throw new Error('The routing service returned no route.');
+    const pts = f.geometry.coordinates.map(([lng, lat]) => [lat, lng]);
+    routeLayer.clearLayers();
+    L.polyline(pts, { color: '#1b7f4b', weight: 6 }).addTo(routeLayer);
+    map.fitBounds(L.latLngBounds(pts), {
+      paddingTopLeft: [20, 90],
+      paddingBottomRight: [20, Math.round(window.innerHeight * 0.55)],
+    });
+    routeInfo = {
+      km: (f.properties.summary.distance / 1000).toFixed(2),
+      min: Math.round(f.properties.summary.duration / 60),
+    };
+    renderCard();
+  } catch (e) {
+    alert('Route could not be loaded: ' + (e.message || e));
+  }
+}
+
+/* ---------- camera and photos ---------- */
+function takePhoto(cb) {
+  pickCb = cb;
+  $('camera').click();
+}
+
+$('camera').addEventListener('change', () => {
+  const cam = $('camera');
+  const file = cam.files && cam.files[0];
+  cam.value = '';
+  const cb = pickCb;
+  pickCb = null;
+  if (file && cb) cb(file);
+});
+
+async function shrink(file) {
+  try {
+    const src = URL.createObjectURL(file);
+    const img = await new Promise((resolve, reject) => {
+      const i = new Image();
+      i.onload = () => resolve(i);
+      i.onerror = reject;
+      i.src = src;
+    });
+    const max = 1600;
+    const scale = Math.min(1, max / Math.max(img.naturalWidth, img.naturalHeight));
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.round(img.naturalWidth * scale);
+    canvas.height = Math.round(img.naturalHeight * scale);
+    canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+    URL.revokeObjectURL(src);
+    const blob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/jpeg', 0.8));
+    return blob || file;
+  } catch (e) {
+    return file;
+  }
+}
+
+async function uploadPhoto(file, kind) {
+  const blob = await shrink(file);
+  const path = `${me.id}/${kind}-${Date.now()}.jpg`;
+  const { error } = await db.storage.from('site-photos').upload(path, blob, { contentType: 'image/jpeg' });
+  if (error) throw error;
+  return db.storage.from('site-photos').getPublicUrl(path).data.publicUrl;
+}
+
+/* ---------- inspections and dumped again ---------- */
+function proximityFor(s) {
+  if (!myLoc || myLoc.acc == null) {
+    alert('Waiting for your GPS location. Stand outside with open sky and try again.');
+    return null;
+  }
+  if (myLoc.acc > 25) {
+    alert(`Your GPS is ±${Math.round(myLoc.acc)} m. Wait until it shows ±25 m or better, then try again.`);
+    return null;
+  }
+  const d = distanceM(myLoc.lat, myLoc.lng, s.latitude, s.longitude);
+  if (d > 25) {
+    alert(`You are about ${Math.round(d)} m from this site. Go within 25 m of the pin to continue.`);
+    return null;
+  }
+  return { d, acc: myLoc.acc };
+}
+
+function startInspection(siteId, dump) {
+  const s = sites.find((x) => x.id === siteId);
+  if (!s || !proximityFor(s)) return;
+  takePhoto((file) => {
+    const tl = timelineOf(s);
+    review = { site: s, file, dump, previewUrl: URL.createObjectURL(file), previous: tl[tl.length - 1] };
+    renderReview();
+  });
+}
+
+function renderReview() {
+  const r = review;
+  if (!r) return;
+  const pv = r.previous;
+  const [pvText, pvColor] = KIND[pv.kind];
+  const prevLabel = r.dump ? 'Last photo' : 'Before';
+  $('review').innerHTML = `
+    <div class="sheetHead"><h2>${r.dump ? 'Dumped Again?' : 'Check the Cleanup'}</h2></div>
+    <p class="hint">${r.dump
+      ? 'Confirming turns the site red again. The new photo becomes the After photo, and the last photo becomes the Before photo. Older photos go into the history on the Ministry dashboard.'
+      : 'Compare the new photo with the last photo of this site. Is the site really clean? Either way, the new photo is saved as a record.'}</p>
+    <div class="photos">
+      <figure class="ph" data-zoom="${esc(pv.url)}" data-label="${esc(prevLabel + ' · ' + fmtDate(pv.at))}">
+        <img src="${esc(pv.url)}" alt="">
+        <figcaption>${esc(prevLabel)} · ${esc(fmtDate(pv.at))}</figcaption>
+        <span class="pill ${pvColor}">${pvText}</span>
+      </figure>
+      <figure class="ph" data-zoom="${esc(r.previewUrl)}" data-label="New photo">
+        <img src="${esc(r.previewUrl)}" alt="">
+        <figcaption>${r.dump ? 'New photo' : 'After (new photo)'}</figcaption>
+      </figure>
+    </div>
+    ${r.dump
+      ? '<button class="btn orange" data-rev="dump">Yes, Dumped Again (Reopen Site)</button>'
+      : '<button class="btn green" data-rev="cleared">Yes, It Is Cleared</button><button class="btn red" data-rev="not_cleared">No, Still Not Cleared (Save Photo, Keep as Mapped)</button>'}
+    <button class="btn light" data-rev="retake">Retake Photo</button>
+    <button class="btn light" data-rev="cancel">Cancel (nothing is saved)</button>
+  `;
+  $('review').classList.remove('hidden');
+}
+
+function closeReview() {
+  if (review) URL.revokeObjectURL(review.previewUrl);
+  review = null;
+  $('review').classList.add('hidden');
+  $('review').innerHTML = '';
+}
+
+function setReviewBusy(on) {
+  $('review').querySelectorAll('button').forEach((b) => { b.disabled = on; });
+}
+
+$('review').addEventListener('click', (e) => {
+  const b = e.target.closest('[data-rev]');
+  if (!b || !review) return;
+  const act = b.dataset.rev;
+  if (act === 'cancel') return closeReview();
+  if (act === 'retake') {
+    const { site, dump } = review;
+    closeReview();
+    return startInspection(site.id, dump);
+  }
+  if (act === 'dump') return saveDump();
+  return saveInspection(act);
+});
+
+async function saveInspection(result) {
+  const r = review;
+  if (!r) return;
+  const prox = proximityFor(r.site);
+  if (!prox) return;
+  setReviewBusy(true);
+  try {
+    const url = await uploadPhoto(r.file, 'check');
+    const { error } = await db.from('site_checks').insert({
+      site_id: r.site.id,
+      result,
+      photo_url: url,
+      checked_by: me.id,
+      latitude: myLoc.lat,
+      longitude: myLoc.lng,
+      gps_accuracy_m: prox.acc,
+      distance_m: Math.round(prox.d),
+    });
+    if (error) throw error;
+    if (result === 'cleared') {
+      const { data, error: upErr } = await db.from('sites')
+        .update({ status: 'cleared', cleared_photo_url: url, cleared_at: new Date().toISOString() })
+        .eq('id', r.site.id)
+        .select();
+      if (upErr) throw upErr;
+      if (!data || !data.length) throw new Error('This site could not be updated.');
+    }
+    await finishAction(result === 'cleared'
+      ? 'Site cleared. The pin is now green.'
+      : 'Saved as a Not Cleared check. The site stays red.');
+  } catch (e) {
+    setReviewBusy(false);
+    alert('Could not save: ' + (e.message || e));
+  }
+}
+
+async function saveDump() {
+  const r = review;
+  if (!r) return;
+  const prox = proximityFor(r.site);
+  if (!prox) return;
+  setReviewBusy(true);
+  try {
+    const url = await uploadPhoto(r.file, 'dumped');
+    const { error } = await db.rpc('report_dumped_again', {
+      p_site_id: r.site.id,
+      p_photo_url: url,
+      p_lat: myLoc.lat,
+      p_lng: myLoc.lng,
+      p_accuracy: prox.acc,
+      p_distance: Math.round(prox.d),
+    });
+    if (error) throw error;
+    await finishAction('Site reopened. It is red again, and the new photo is the After photo.');
+  } catch (e) {
+    setReviewBusy(false);
+    alert('Could not save: ' + (e.message || e));
+  }
+}
+
+async function finishAction(message) {
+  closeReview();
+  selectedId = null;
+  routeInfo = null;
+  routeLayer.clearLayers();
+  await loadAll();
+  alert(message);
+}
+
+/* ---------- mapping a new site (team) ---------- */
+function resetMapSheet() {
+  if (draft && draft.previewUrl) URL.revokeObjectURL(draft.previewUrl);
+  draft = null;
+  $('mapSheet').classList.add('hidden');
+  $('mapSheet').innerHTML = '';
+}
+
+function openMapSheet() {
+  draft = { coords: null, file: null, previewUrl: null, legality: null, waste: 'mixed', size: 'medium', lga: '', ward: '', notes: '' };
+  renderMapSheet();
+  $('mapSheet').classList.remove('hidden');
+}
+
+function closeMapSheet() {
+  if (draft && draft.file && !confirm('Discard this site? Nothing has been saved yet.')) return;
+  resetMapSheet();
+}
+
+function opts(group, items, current) {
+  return `<div class="opts">${items.map(([v, label]) =>
+    `<button class="opt ${current === v ? 'on' : ''}" data-group="${group}" data-value="${v}">${esc(label)}</button>`).join('')}</div>`;
+}
+
+function renderMapSheet() {
+  const d = draft;
+  if (!d) return;
+  const good = d.coords && d.coords.acc <= 30;
+  $('mapSheet').innerHTML = `
+    <div class="sheetHead">
+      <h2>Map a Dump Site</h2>
+      <button class="iconbtn dark" data-map="close" aria-label="Close">✕</button>
+    </div>
+    <button class="btn" data-map="location">${d.coords ? 'Refresh Location' : 'Get My Location'}</button>
+    ${d.coords ? `<p class="sub" style="color:${good ? '#1b7f4b' : '#c62828'}">${d.coords.lat.toFixed(5)}, ${d.coords.lng.toFixed(5)} · accuracy ±${Math.round(d.coords.acc)} m${good ? '' : ' (needs ±30 m or better)'}</p>` : ''}
+    <button class="btn" data-map="photo">${d.previewUrl ? 'Retake Photo' : 'Take Photo'}</button>
+    ${d.previewUrl ? `<img class="preview" src="${esc(d.previewUrl)}" alt="">` : ''}
+    <div class="label">Dump Site Type (Required)</div>
+    ${opts('legality', [['legal', 'Authorized'], ['illegal', 'Unauthorized']], d.legality)}
+    <div class="label">Waste Type</div>
+    ${opts('waste', WASTE.map((w) => [w, cap(w)]), d.waste)}
+    <div class="label">Size</div>
+    ${opts('size', SIZES.map((z) => [z, cap(z)]), d.size)}
+    <input class="field" id="fLga" placeholder="LGA" value="${esc(d.lga)}">
+    <input class="field" id="fWard" placeholder="Ward" value="${esc(d.ward)}">
+    <textarea class="field" id="fNotes" placeholder="Remarks (optional)">${esc(d.notes)}</textarea>
+    <button class="btn green" data-map="save">Save Site</button>
+  `;
+  $('fLga').oninput = (e) => { draft.lga = e.target.value; };
+  $('fWard').oninput = (e) => { draft.ward = e.target.value; };
+  $('fNotes').oninput = (e) => { draft.notes = e.target.value; };
+}
+
+$('mapSheet').addEventListener('click', (e) => {
+  if (!draft) return;
+  const chip = e.target.closest('[data-group]');
+  if (chip) {
+    const group = chip.dataset.group;
+    draft[group] = chip.dataset.value;
+    $('mapSheet').querySelectorAll(`[data-group="${group}"]`).forEach((b) => b.classList.toggle('on', b === chip));
+    return;
+  }
+  const b = e.target.closest('[data-map]');
+  if (!b) return;
+  const act = b.dataset.map;
+  if (act === 'close') return closeMapSheet();
+  if (act === 'location') return getMapLocation();
+  if (act === 'photo') {
+    return takePhoto((file) => {
+      if (!draft) return;
+      if (draft.previewUrl) URL.revokeObjectURL(draft.previewUrl);
+      draft.file = file;
+      draft.previewUrl = URL.createObjectURL(file);
+      renderMapSheet();
+    });
+  }
+  if (act === 'save') return saveNewSite();
+});
+
+function getMapLocation() {
+  if (!navigator.geolocation) return alert('Location is not available on this device.');
+  const btn = $('mapSheet').querySelector('[data-map="location"]');
+  if (btn) { btn.textContent = 'Getting location…'; btn.disabled = true; }
+  navigator.geolocation.getCurrentPosition(
+    (p) => {
+      if (!draft) return;
+      draft.coords = { lat: p.coords.latitude, lng: p.coords.longitude, acc: p.coords.accuracy ?? 999 };
+      renderMapSheet();
+    },
+    (err) => {
+      alert('Could not get your location: ' + err.message);
+      renderMapSheet();
+    },
+    { enableHighAccuracy: true, maximumAge: 0, timeout: 20000 }
+  );
+}
+
+function setMapBusy(on) {
+  const b = $('mapSheet').querySelector('[data-map="save"]');
+  if (b) { b.disabled = on; b.textContent = on ? 'Saving…' : 'Save Site'; }
+}
+
+async function saveNewSite() {
+  const d = draft;
+  if (!d) return;
+  if (!d.coords) return alert('Get your location first.');
+  if (!d.file) return alert('Take a photo first.');
+  if (!d.legality) return alert('Choose Authorized or Unauthorized dump site.');
+  if (d.coords.acc > 30) {
+    return alert(`GPS is ±${Math.round(d.coords.acc)} m. Move to open sky, refresh the location, and try again (needs ±30 m or better).`);
+  }
+  setMapBusy(true);
+  try {
+    const { data: near } = await db.rpc('nearby_sites', { p_lat: d.coords.lat, p_lng: d.coords.lng, p_radius_m: 30 });
+    if (near && near.length && !confirm('A site is already mapped within 30 m. Save anyway?')) {
+      setMapBusy(false);
+      return;
+    }
+    const url = await uploadPhoto(d.file, 'site');
+    const { error } = await db.from('sites').insert({
+      latitude: d.coords.lat,
+      longitude: d.coords.lng,
+      gps_accuracy_m: d.coords.acc,
+      photo_url: url,
+      waste: d.waste,
+      size: d.size,
+      legality: d.legality,
+      lga: d.lga.trim() || null,
+      ward: d.ward.trim() || null,
+      notes: d.notes.trim() || null,
+      mapped_by: me.id,
+    });
+    if (error) throw error;
+    resetMapSheet();
+    await loadAll();
+    alert('Site mapped. It is now live on the map.');
+  } catch (e) {
+    setMapBusy(false);
+    alert('Could not save: ' + (e.message || e));
+  }
+}
+
+/* ---------- bottom bar, search, photo viewer ---------- */
+$('bottombar').addEventListener('click', (e) => {
+  const b = e.target.closest('[data-filter],[data-bar]');
+  if (!b) return;
+  if (b.dataset.filter) {
+    legalFilter = b.dataset.filter === 'all' ? null : b.dataset.filter;
+    document.querySelectorAll('[data-filter]').forEach((x) => {
+      const on = x.dataset.filter === 'all' ? !legalFilter : x.dataset.filter === legalFilter;
+      x.classList.toggle('on', on);
+    });
+    renderMarkers();
+    return;
+  }
+  if (b.dataset.bar === 'center') return centerOnMe();
+  if (b.dataset.bar === 'mapsite') return openMapSheet();
+});
+
+$('searchBtn').onclick = () => {
+  const row = $('searchRow');
+  const opening = row.classList.contains('hidden');
+  row.classList.toggle('hidden', !opening);
+  if (opening) {
+    $('searchInput').focus();
+  } else {
+    query = '';
+    $('searchInput').value = '';
+    renderMarkers();
+  }
+};
+
+$('searchClose').onclick = () => {
+  query = '';
+  $('searchInput').value = '';
+  $('searchRow').classList.add('hidden');
+  renderMarkers();
+};
+
+$('searchInput').addEventListener('input', (e) => {
+  query = e.target.value;
+  renderMarkers();
+  clearTimeout(searchTimer);
+  searchTimer = setTimeout(fitToSearch, 400);
+});
+
+function fitToSearch() {
+  const found = visibleSites();
+  if (!query.trim() || !found.length || !map) return;
+  if (found.length === 1) map.setView([found[0].latitude, found[0].longitude], 17);
+  else map.fitBounds(L.latLngBounds(found.map((s) => [s.latitude, s.longitude])).pad(0.2), { maxZoom: 17 });
+}
+
+document.addEventListener('click', (e) => {
+  const z = e.target.closest('[data-zoom]');
+  if (z) openViewer(z.dataset.zoom, z.dataset.label);
+});
+
+function openViewer(url, label) {
+  vz = 1; vx = 0; vy = 0;
+  applyV();
+  $('viewerImg').src = url;
+  $('viewerLabel').textContent = label || '';
+  $('viewer').classList.remove('hidden');
+}
+
+function closeViewer() {
+  $('viewer').classList.add('hidden');
+  $('viewerImg').src = '';
+}
+
+function applyV() {
+  $('viewerImg').style.transform = `translate(${vx}px, ${vy}px) scale(${vz})`;
+}
+
+$('viewerClose').onclick = closeViewer;
+
+const stage = $('viewerStage');
+const dist2 = (a, b) => Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY);
+let pinchStart = null, panStart = null;
+
+stage.addEventListener('touchstart', (e) => {
+  if (e.touches.length === 2) {
+    pinchStart = { d: dist2(e.touches[0], e.touches[1]), z: vz };
+    panStart = null;
+  } else if (e.touches.length === 1) {
+    panStart = { x: e.touches[0].clientX - vx, y: e.touches[0].clientY - vy };
+  }
+}, { passive: true });
+
+stage.addEventListener('touchmove', (e) => {
+  e.preventDefault();
+  if (e.touches.length === 2 && pinchStart) {
+    vz = Math.min(5, Math.max(1, pinchStart.z * dist2(e.touches[0], e.touches[1]) / pinchStart.d));
+  } else if (e.touches.length === 1 && panStart && vz > 1) {
+    vx = e.touches[0].clientX - panStart.x;
+    vy = e.touches[0].clientY - panStart.y;
+  }
+  applyV();
+}, { passive: false });
+
+stage.addEventListener('touchend', (e) => {
+  if (e.touches.length < 2) pinchStart = null;
+  if (e.touches.length === 0) {
+    panStart = null;
+    if (vz <= 1.02) { vz = 1; vx = 0; vy = 0; applyV(); }
+  }
+});
+
+boot();
+</script>
+</body>
+</html>
